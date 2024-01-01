@@ -199,7 +199,7 @@ x11_update_window_events :: (display: *Display) {
     // that doesn't expect other events, or at most after a second,
     // so some buggy program doesn't hang the editor while handling our clipboard response.
     expect_more_events := false;
-    start_time := get_time();
+    start_time := seconds_since_init();
     elapsed_time := start_time;
 
     while X11.XPending(x11_display.handle) || (expect_more_events && elapsed_time < 1.0) {
@@ -208,7 +208,7 @@ x11_update_window_events :: (display: *Display) {
             expect_more_events = x11_handle_event(x11_display, *xev);
             timers_tick();
         }
-        elapsed_time = get_time() - start_time;
+        elapsed_time = seconds_since_init() - start_time;
     }
 }
 
