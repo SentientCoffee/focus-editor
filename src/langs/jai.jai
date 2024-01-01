@@ -8,27 +8,77 @@ highlight_jai_syntax :: (using buffer: *Buffer) {
         token := get_next_token(*tokenizer);
         if token.type == .eof break;
 
-        // Maybe retroactively highlight a function
-        if token.type == .punctuation && token.punctuation == .l_paren {
-            before_prev, prev := tokenizer.last_tokens[0], tokenizer.last_tokens[1];
-            if prev.type == .identifier {
-                // Handle "func("
-                memset(colors.data + prev.start, xx Color.CODE_FUNCTION, prev.len);
-            } else if before_prev.type == .identifier && prev.type == .operation && prev.operation == .double_colon {
-                // Handle "func :: ("
-                memset(colors.data + before_prev.start, xx Color.CODE_FUNCTION, before_prev.len);
+        // Maybe retroactively highlight a procedure
+        should_highlight_last_token_as_proc :: (tokenizer: Jai_Tokenizer, token: Token) -> bool {
+            if !(token.type == .punctuation && token.punctuation == .l_paren) then return false;
+            prev1, prev2, prev3, prev4 := tokenizer.last_tokens[0], tokenizer.last_tokens[1], tokenizer.last_tokens[2], tokenizer.last_tokens[3];
+
+            // Handle "Identifier(" ...
+            if prev1.type != .identifier then return false;
+
+            if prev2.type == .operation {
+                if prev2.operation == {
+                    // ... but not "-> Identifier(" (definitely a type) ...
+                    case .arrow; return false;
+
+                    // ... nor ":Identifier(" (likely types) ...
+                    case .colon;
+                        // ... (however " for Identifier : Identifier(" is likely not a type) ...
+                        if !(prev3.type == .identifier && prev4.type == .keyword && prev4.keyword == .kw_for) then return false;
+
+                    case .asterisk;
+                        if prev3.type == .operation && (prev3.operation == .colon || prev3.operation == .arrow) {
+                            // ... nor ": *Identifier(" / "-> *Identifier" (definitely a type) ...
+                            return false;
+                        } else if prev3.type == .punctuation && prev3.punctuation == .l_paren && prev4.type == .keyword && prev4.keyword == .kw_cast {
+                            // ... nor "cast(*Identifier(" (definitely a type) ...
+                            return false;
+                        }
+                }
+
+            } else if prev2.type == .punctuation {
+                if prev2.punctuation == {
+                    // ... nor "$Identifier(" / "]Identifier(" (likely types) ...
+                    case .dollar;    #through;
+                    case .r_bracket; return false;
+
+                    // ... nor "cast(Identifier(" (definitely a type)
+                    case .l_paren;
+                        if prev3.type == .keyword && prev3.keyword == .kw_cast then return false;
+                }
             }
-        } else if token.type == .keyword && token.keyword == .kw_inline {
-            // Handle "func :: inline"
-            before_prev, prev := tokenizer.last_tokens[0], tokenizer.last_tokens[1];
-            if before_prev.type == .identifier && prev.type == .operation && prev.operation == .double_colon {
-                memset(colors.data + before_prev.start, xx Color.CODE_FUNCTION, before_prev.len);
-            }
+
+            return true;
         }
 
-        // Remember last 2 tokens
-        tokenizer.last_tokens[0] = tokenizer.last_tokens[1];
-        tokenizer.last_tokens[1] = token;
+        should_highlight_second_last_token_as_proc :: (tokenizer: Jai_Tokenizer, token: Token) -> bool {
+            if token.type != .punctuation && token.type != .keyword            then return false;
+
+            // Handle "proc :: ("
+            if token.type == .punctuation && token.punctuation != .l_paren     then return false;
+            // Handle "proc :: inline"
+            if token.type == .keyword     && token.keyword != .kw_inline       then return false;
+
+            // Must have "Identifier ::" as the previous tokens
+            prev1, prev2 := tokenizer.last_tokens[0], tokenizer.last_tokens[1];
+            if !(prev1.type == .operation && prev1.operation == .double_colon) then return false;
+            if prev2.type != .identifier                                       then return false;
+
+            return true;
+        }
+
+        if should_highlight_last_token_as_proc(tokenizer, token) {
+            memset(colors.data + tokenizer.last_tokens[0].start, xx Color.CODE_FUNCTION, tokenizer.last_tokens[0].len);
+        }
+        if should_highlight_second_last_token_as_proc(tokenizer, token) {
+            memset(colors.data + tokenizer.last_tokens[1].start, xx Color.CODE_FUNCTION, tokenizer.last_tokens[1].len);
+        }
+
+        // Remember last 4 tokens
+        tokenizer.last_tokens[3] = tokenizer.last_tokens[2];
+        tokenizer.last_tokens[2] = tokenizer.last_tokens[1];
+        tokenizer.last_tokens[1] = tokenizer.last_tokens[0];
+        tokenizer.last_tokens[0] = token;
 
         color := COLOR_MAP[token.type];
         memset(colors.data + token.start, xx color, token.len);
@@ -611,7 +661,7 @@ Jai_Tokenizer :: struct {
     start_t: *u8;  // cursor when starting parsing new token
     t:       *u8;  // cursor
 
-    last_tokens: [2] Token;
+    last_tokens: [4] Token;
 }
 
 Token :: struct {
