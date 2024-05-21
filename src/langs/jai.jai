@@ -79,6 +79,32 @@ tokenize_jai :: (using buffer: *Buffer, start_offset := -1, count := -1) -> [] B
         tokenizer.last_tokens[1] = tokenizer.last_tokens[0];
         tokenizer.last_tokens[0] = token;
 
+            // Handle "proc :: ("
+            if token.type == .punctuation && token.punctuation != .l_paren     then return false;
+            // Handle "proc :: inline"
+            if token.type == .keyword     && token.keyword != .kw_inline       then return false;
+
+            // Must have "Identifier ::" as the previous tokens
+            prev1, prev2 := tokenizer.last_tokens[0], tokenizer.last_tokens[1];
+            if !(prev1.type == .operation && prev1.operation == .double_colon) then return false;
+            if prev2.type != .identifier                                       then return false;
+
+            return true;
+        }
+
+        if should_highlight_last_token_as_proc(tokenizer, token) {
+            memset(colors.data + tokenizer.last_tokens[0].start, xx Color.CODE_FUNCTION, tokenizer.last_tokens[0].len);
+        }
+        if should_highlight_second_last_token_as_proc(tokenizer, token) {
+            memset(colors.data + tokenizer.last_tokens[1].start, xx Color.CODE_FUNCTION, tokenizer.last_tokens[1].len);
+        }
+
+        // Remember last 4 tokens
+        tokenizer.last_tokens[3] = tokenizer.last_tokens[2];
+        tokenizer.last_tokens[2] = tokenizer.last_tokens[1];
+        tokenizer.last_tokens[1] = tokenizer.last_tokens[0];
+        tokenizer.last_tokens[0] = token;
+
         memset(tokens.data + token.start, xx token.type, token.len);
     }
 
