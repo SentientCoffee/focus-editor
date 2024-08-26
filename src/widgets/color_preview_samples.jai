@@ -1009,3 +1009,7 @@ This is a footnote reference[^1].
 [^1]: This is the footnote text.
 
 MARKDOWN
+
+SAMPLE_Shell :: #string LANG_SHELL
+# TODO: Add a sample here
+LANG_SHELL
