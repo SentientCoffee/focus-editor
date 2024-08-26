@@ -234,6 +234,17 @@ map_name_to_color :: (name: string) -> Color {
     return .NONE;
 }
 
+map_code_name_to_token_type :: (name: string) -> Token_Type {
+    if !begins_with(name, "code_") then return .default;
+    advance(*name, "code_".count);
+
+    ti := type_info(Token_Type);
+    found, idx := array_find(ti.names, name);
+    if !found then return .default;
+
+    return xx ti.values[idx];
+}
+
 add_highlight :: inline (parser: *Config_Parser, offset_from_line_start: s64, count: s64, type: Token_Type, line_start_offset := -1) {
     if !parser.parse_for_highlighting return;
 
@@ -547,7 +558,10 @@ parse_style_line :: (using parser: *Config_Parser, line: string) -> success: boo
                     add_highlight(parser, value.data - line.data, value.count, .error);
                     return true, tprint("Attempted to reference an unknown color '$%'", ref_color_name);
                 }
+
+                add_highlight(parser, color_name.data - line.data, color_name.count, map_code_name_to_token_type(color_name));
                 add_highlight(parser, value.data - line.data, value.count, .value);
+
                 array_add(*result.config.color_refs, .{
                     color_name = color_name,
                     color = color_id,
@@ -563,6 +577,8 @@ parse_style_line :: (using parser: *Config_Parser, line: string) -> success: boo
                     add_highlight(parser, value.data - line.data, value.count, .error);
                     return true, tprint("Couldn't parse '%'. Expected a color in the form RRGGBB or RRGGBBAA, got '%'", color_name, value);
                 }
+
+                add_highlight(parser, 0, color_name.count, map_code_name_to_token_type(color_name));
                 array_add(*result.config.colors, Parsed_Color.{ color_id, color });
             }
 
